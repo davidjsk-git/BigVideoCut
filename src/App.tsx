@@ -20,6 +20,7 @@ function formatTime(seconds: number) {
 
 export default function App() {
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const ffmpegRef = useRef(new FFmpeg());
   
@@ -38,17 +39,49 @@ export default function App() {
   }, []);
 
   const loadFFmpeg = async () => {
-    const baseURL = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm';
     const ffmpeg = ffmpegRef.current;
+    setLoadError(null);
     
-    // SharedArrayBuffer와 Worker를 활용한 멀티스레딩 초기화
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
-    });
-    
-    setLoaded(true);
+    try {
+      console.log('FFmpeg 로딩 시작...');
+      
+      // SharedArrayBuffer 지원 여부 확인
+      const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+      console.log('SharedArrayBuffer 지원:', hasSharedArrayBuffer);
+      
+      let baseURL: string;
+      let config: any;
+      
+      if (hasSharedArrayBuffer) {
+        // SharedArrayBuffer 지원: 멀티스레딩 버전 사용
+        baseURL = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm';
+        console.log('멀티스레딩 버전 로딩...');
+        config = {
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+          workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
+        };
+      } else {
+        // SharedArrayBuffer 미지원: 단일 스레드 버전 사용
+        baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+        console.log('단일 스레드 버전 로딩...');
+        config = {
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        };
+      }
+      
+      console.log('FFmpeg.load() 시작...');
+      await ffmpeg.load(config);
+      console.log('FFmpeg 로딩 완료!');
+      
+      setLoaded(true);
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      console.error('FFmpeg 로딩 오류:', errorMsg);
+      setLoadError(`FFmpeg 로딩 실패: ${errorMsg}`);
+      setLoaded(false);
+    }
   };
 
   const processSelectedFile = (selected: File | undefined | null) => {
@@ -268,9 +301,28 @@ export default function App() {
 
         {!loaded ? (
           <div className="flex flex-col items-center justify-center p-12 bg-zinc-900/50 rounded-2xl border border-zinc-800 backdrop-blur-sm">
-            <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-4" />
-            <p className="text-zinc-300 font-medium tracking-wide">FFmpeg 엔진 로딩 중...</p>
-            <p className="text-zinc-500 text-sm mt-2">최초 로딩 시 시간이 다소 소요될 수 있습니다.</p>
+            {loadError ? (
+              <>
+                <AlertCircle className="w-10 h-10 text-red-500 mb-4" />
+                <p className="text-zinc-300 font-medium tracking-wide">FFmpeg 로딩 실패</p>
+                <p className="text-red-400 text-sm mt-2 text-center">{loadError}</p>
+                <button
+                  onClick={() => {
+                    setLoadError(null);
+                    loadFFmpeg();
+                  }}
+                  className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium transition-colors"
+                >
+                  다시 시도
+                </button>
+              </>
+            ) : (
+              <>
+                <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-4" />
+                <p className="text-zinc-300 font-medium tracking-wide">FFmpeg 엔진 로딩 중...</p>
+                <p className="text-zinc-500 text-sm mt-2">최초 로딩 시 시간이 다소 소요될 수 있습니다.</p>
+              </>
+            )}
           </div>
         ) : !videoUrl ? (
           <label 
