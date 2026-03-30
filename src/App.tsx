@@ -56,29 +56,62 @@ export default function App() {
         // SharedArrayBuffer 지원: 멀티스레딩 버전 사용
         baseURL = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm';
         console.log('멀티스레딩 버전 로딩...');
+        console.log(`baseURL: ${baseURL}`);
+        
+        console.log('coreURL 다운로드 시작...');
+        const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+        console.log('coreURL 완료');
+        
+        console.log('wasmURL 다운로드 시작...');
+        const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+        console.log('wasmURL 완료');
+        
+        console.log('workerURL 다운로드 시작...');
+        const workerURL = await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript');
+        console.log('workerURL 완료');
+        
         config = {
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-          workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
+          coreURL,
+          wasmURL,
+          workerURL,
         };
       } else {
         // SharedArrayBuffer 미지원: 단일 스레드 버전 사용
         baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
         console.log('단일 스레드 버전 로딩...');
+        console.log(`baseURL: ${baseURL}`);
+        
+        console.log('coreURL 다운로드 시작...');
+        const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+        console.log('coreURL 완료');
+        
+        console.log('wasmURL 다운로드 시작...');
+        const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+        console.log('wasmURL 완료');
+        
         config = {
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+          coreURL,
+          wasmURL,
         };
       }
       
       console.log('FFmpeg.load() 시작...');
-      await ffmpeg.load(config);
+      console.log('로드 설정:', config);
+      
+      // 타임아웃 설정 (30초)
+      const loadPromise = ffmpeg.load(config);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('FFmpeg 로딩 타임아웃 (30초)')), 30000)
+      );
+      
+      await Promise.race([loadPromise, timeoutPromise]);
       console.log('FFmpeg 로딩 완료!');
       
       setLoaded(true);
     } catch (error: any) {
       const errorMsg = error?.message || String(error);
       console.error('FFmpeg 로딩 오류:', errorMsg);
+      console.error('전체 에러 객체:', error);
       setLoadError(`FFmpeg 로딩 실패: ${errorMsg}`);
       setLoaded(false);
     }
